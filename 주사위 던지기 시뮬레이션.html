@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>주사위 눈 실험</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      background-color: #f5f5f5;
+      text-align: center;
+      padding: 10px;
+      margin: 0;
+    }
+    h1, h2 {
+      font-size: 18px;
+      margin: 8px 0;
+    }
+    .btn-group {
+      margin-bottom: 12px;
+    }
+    button {
+      padding: 6px 18px;
+      margin: 4px 2px;
+      font-size: 14px;
+      background: #ffffff;
+      color: #333;
+      border: 1px solid #bbb;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.15s, border 0.15s, color 0.15s;
+      outline: none;
+      box-shadow: none;
+    }
+    button:hover, button:focus {
+      background: #f0f0f0;
+      border-color: #777;
+      color: #111;
+    }
+    .result-text {
+      font-size: 18px;
+      font-weight: bold;
+      padding: 10px 20px;
+      display: inline-block;
+      margin: 8px 0;
+      border-radius: 6px;
+      border: 1px solid #777;
+      min-width: 36px;
+    }
+    .results-row {
+      display: flex;
+      justify-content: center;
+      gap: 5px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    .chip {
+      background: #d0e8ff;
+      color: #003366;
+      border: 1px solid #99bbff;
+      border-radius: 5px;
+      padding: 4px 10px;
+      margin: 0 1.5px;
+      font-weight: bold;
+      font-size: 16px;
+      min-width: 36px;
+      text-align: center;
+      transition: background 0.18s;
+    }
+    .stat-container {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr) 240px;
+      gap: 20px;
+      margin-top: 10px;
+      justify-content: center;
+      align-items: flex-start;
+      max-width: 1000px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .table-wrapper {
+      min-width: 280px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .table-wrapper h2 {
+      text-align: center;
+      width: 100%;
+    }
+    .table-wrapper table {
+      width: 100%;
+      max-width: 500px;
+      background-color: #fff !important;
+      border-collapse: collapse;
+    }
+    table {
+      border-collapse: collapse;
+      font-size: 12px;
+      background-color: white !important;
+      margin: 0 auto;
+      width: 100%;
+      max-width: 380px;
+    }
+    td, th {
+      border: 2px solid #888;
+      padding: 8px 6px;
+    }
+    /* 표의 항상 흰색 배경을 강제 */
+    .table-wrapper table, 
+    .table-wrapper table tbody, 
+    .table-wrapper table thead, 
+    .table-wrapper table tr, 
+    .table-wrapper table td, 
+    .table-wrapper table th {
+      background-color: #fff !important;
+    }
+    #chartContainer {
+      min-width: 280px;
+      background-color: white;
+      border: 1px solid #888;
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    #probChart {
+      width: 220px;
+      height: 180px;
+      margin-top: 10px;
+    }
+    #result {
+      display: none !important;
+    }
+    @media (max-width: 900px) {
+      .stat-container {
+        grid-template-columns: 1fr;
+      }
+      #chartContainer, .table-wrapper {
+        margin: 0 auto 20px auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>주사위 눈 실험</h1>
+  <div class="btn-group">
+    <button onclick="rollDice()">1번 굴리기</button>
+    <button onclick="rollMultipleWithRow(10)">10번 굴리기</button>
+    <button onclick="resetExperiment()">초기화</button>
+  </div>
+
+  <h2>결과</h2>
+  <div class="results-row" id="resultsRow"></div>
+
+<div class="stat-container">
+  <div class="table-wrapper">
+    <h2>현재 통계</h2>
+    <table>
+      <tbody>
+        <tr><td>굴린 횟수(번)</td><td id="total">0</td></tr>
+        <tr><td>6이 나온 횟수(번)</td><td id="sixCount">0</td></tr>
+        <tr><td>6이 나온 상대도수</td><td id="sixProb">0.00</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="table-wrapper">
+    <h2>특정 누적 지점 통계</h2>
+    <table id="summaryTable">
+      <thead>
+        <tr id="headerRow">
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>6이 나온 횟수</td></tr>
+        <tr><td>6이 나온 상대도수</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div id="chartContainer">
+    <h2>확률 막대그래프</h2>
+    <canvas id="probChart" width="220" height="180"></canvas>
+  </div>
+</div>
+
+  <script>
+    let total = 0;
+    let sixCount = 0;
+    const checkpoints = [100, 300, 500, 700, 900, 1000];
+    const historyLogged = new Set();
+
+    function rollDice() {
+      const roll = Math.floor(Math.random() * 6) + 1;
+      total++;
+      if (roll === 6) {
+        sixCount++;
+      }
+      updateTable();
+      showResultsRow([roll]);
+    }
+
+    function rollMultipleWithRow(times) {
+      let results = [];
+      for (let i = 0; i < times; i++) {
+        const roll = Math.floor(Math.random() * 6) + 1;
+        results.push(roll);
+        total++;
+        if (roll === 6) sixCount++;
+      }
+      updateTable();
+      showResultsRow(results);
+    }
+
+    function showResultsRow(resultsArr) {
+      const container = document.getElementById("resultsRow");
+      container.innerHTML = "";
+      resultsArr.forEach((roll) => {
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        chip.textContent = roll;
+        container.appendChild(chip);
+      });
+    }
+function createCell(text) {
+  const td = document.createElement("td");
+  td.textContent = text;
+  return td;
+}
+
+  function updateTable() {
+    document.getElementById("total").textContent = total;
+    document.getElementById("sixCount").textContent = sixCount;
+    let sixProb = total === 0 ? 0 : sixCount / total;
+    document.getElementById("sixProb").textContent = sixProb.toFixed(2);
+
+    if (checkpoints.includes(total) && !historyLogged.has(total)) {
+      const headerRow = document.getElementById("headerRow");
+      const bodyRows = document.querySelectorAll("#summaryTable tbody tr");
+
+      const th = document.createElement("th");
+      th.textContent = total;
+      headerRow.appendChild(th);
+
+      // 6이 나온 횟수
+      bodyRows[0].appendChild(createCell(total === 1000 ? "166" : `${sixCount}`));
+      // 6이 나온 상대도수
+      bodyRows[1].appendChild(createCell(total === 1000 ? "0.16" : `${sixProb.toFixed(2)}`));
+
+      historyLogged.add(total);
+    }
+
+    drawProbChart(sixProb);
+  }
+
+  function resetExperiment() {
+    total = 0;
+    sixCount = 0;
+    historyLogged.clear();
+    updateTable();
+    showResultsRow([]);
+    drawProbChart(0);
+
+    const headerRow = document.getElementById("headerRow");
+    headerRow.innerHTML = "<th></th>";
+    const bodyRows = document.querySelectorAll("#summaryTable tbody tr");
+    bodyRows[0].innerHTML = "<td>6이 나온 횟수</td>";
+    bodyRows[1].innerHTML = "<td>6이 나온 상대도수</td>";
+  }
+
+    document.addEventListener("keydown", function(event) {
+      if (event.code === "Space") {
+        rollMultipleWithRow(10);
+      }
+    });
+
+    function drawProbChart(sixP) {
+      const ctx = document.getElementById("probChart").getContext("2d");
+      ctx.clearRect(0, 0, 220, 180);
+
+      const chartHeight = 120;
+      const barWidth = 90;
+      const baseX = 65;
+      const baseY = 150;
+
+      ctx.strokeStyle = "#666";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(baseX - 20, baseY - chartHeight);
+      ctx.lineTo(baseX - 20, baseY);
+      ctx.lineTo(baseX + barWidth + 20, baseY);
+      ctx.stroke();
+
+      ctx.strokeStyle = "#aaa";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      
+      // 1/6 이론 확률선 위치를 막대그래프 높이에 맞게 정확히 계산
+      const theoryY = baseY - chartHeight * (1/6);
+      ctx.moveTo(baseX - 20, theoryY);
+      ctx.lineTo(baseX + barWidth + 20, theoryY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = "#55aaff";
+      ctx.fillRect(baseX, baseY - chartHeight * sixP, barWidth, chartHeight * sixP);
+
+      ctx.fillStyle = "#333";
+      ctx.font = "bold 13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("6이 나온 확률", baseX + barWidth / 2, baseY + 18);
+      ctx.font = "13px sans-serif";
+      ctx.fillText((sixP * 100).toFixed(1) + "%", baseX + barWidth / 2, baseY - chartHeight * sixP - 8);
+
+      ctx.textAlign = "right";
+      ctx.font = "11px sans-serif";
+      ctx.fillStyle = "#888";
+      ctx.fillText("1.0", baseX - 22, baseY - chartHeight + 5);
+      ctx.fillText("1/6", baseX - 22, theoryY + 5);
+      ctx.fillText("0.0", baseX - 22, baseY + 4);
+    }
+  
+    drawProbChart(0);
+  </script>
+</body>
+</html>

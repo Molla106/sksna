@@ -40,7 +40,7 @@
   초기 자본금:
   <input type="number" id="init-money" value="1000" min="1000" max="1000" step="100" readonly> 만원 &nbsp;&nbsp;
   베팅 금액:
-  <input type="number" id="bet-money" value="100" min="1" step="1"> 만원
+  <input type="number" id="bet-money" value="100" min="100" max="100" step="1" readonly> 만원
 </div>
     <div class="warn" id="warn"></div>
     <div class="controls">
@@ -114,11 +114,10 @@
     gamblerRateInput.value = gamblerRate.toFixed(1);
   }
 
-  function updateBets() {
-    initMoney = 1000;
-    betMoney = parseInt(betMoneyInput.value, 10);
-    if (isNaN(betMoney) || betMoney < 1) betMoney = 100;
-  }
+function updateBets() {
+  initMoney = 1000;
+  betMoney = 100; // 항상 100만원으로 고정
+}
 
   function updateTable() {
     casinoWinCell.textContent = casinoWin;
