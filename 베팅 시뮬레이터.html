@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>베팅 시뮬레이터</title>
+  <style>
+    body { background: #f9f9f9; }
+    .container { width: 650px; margin: 30px auto; }
+    h2 { text-align: center; }
+    .desc { color: #555; text-align: center; margin-bottom: 8px; }
+    .controls { text-align: center; margin-bottom: 10px; }
+    .rate-box, .bet-box { text-align: center; margin-bottom: 10px; }
+    .rate-box input, .bet-box input { width: 60px; font-size: 1em; text-align: right; }
+    table { margin: 0 auto 20px auto; border-collapse: collapse; }
+    th, td { border: 1px solid #bbb; padding: 6px 16px; text-align: center; }
+    th { background: #f1c40f; }
+    .casino { color: #e74c3c; font-weight: bold; }
+    .gambler { color: #2980b9; font-weight: bold; }
+    .total { color: #222; font-weight: bold; }
+    canvas { background: #fff; display: block; margin: 0 auto; border: 1px solid #ccc; }
+    .reset { margin-left: 10px; }
+    .hint { color: #2980b9; font-size: 15px; margin-top: 2px; }
+    .warn { color: #c0392b; font-weight: bold; text-align: center; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>베팅 시뮬레이터</h2>
+    <div class="desc">
+      <div class="hint">
+      </div>
+    </div>
+<div class="rate-box">
+  카지노 승률:
+  <input type="number" id="casino-rate" value="51.3" min="51.3" max="51.3" step="0.1" readonly> % &nbsp;&nbsp;
+  플레이어 승률:
+  <input type="number" id="gambler-rate" value="48.6" min="48.6" max="48.6" step="0.1" readonly> %
+</div>
+<div class="bet-box">
+  초기 자본금:
+  <input type="number" id="init-money" value="1000" min="1000" max="1000" step="100" readonly> 만원 &nbsp;&nbsp;
+  베팅 금액:
+  <input type="number" id="bet-money" value="100" min="1" step="1"> 만원
+</div>
+    <div class="warn" id="warn"></div>
+    <div class="controls">
+      <button id="try1">한 번 베팅</button>
+      <button id="try100">100번 베팅(스페이스바)</button>
+      <button id="try1000">1000번 베팅(엔터)</button>
+      <button id="reset" class="reset">초기화</button>
+    </div>
+<table>
+  <tr>
+    <th></th>
+    <th class="casino">카지노</th>
+    <th class="gambler">플레이어</th>
+    <th class="total">전체</th>
+    <th>잔고(만원)</th>
+    <th style="color:#e74c3c">카지노가 번 돈(만원)</th>
+  </tr>
+  <tr>
+    <th>승리 횟수</th>
+    <td id="casino-win">0</td>
+    <td id="gambler-win">0</td>
+    <td id="total-try">0</td>
+    <td id="money">1000</td>
+    <td id="casino-profit">0</td>
+  </tr>
+  <tr>
+    <th>승률</th>
+    <td id="casino-rate-show">0</td>
+    <td id="gambler-rate-show">0</td>
+    <td>1</td>
+    <td></td>
+    <td></td>
+  </tr>
+</table>
+    <canvas id="graph" width="500" height="260"></canvas>
+  </div>
+<script>
+  // 변수
+  let casinoWin = 0, gamblerWin = 0, totalTry = 0;
+  let casinoRate = 51.3; // %
+  let gamblerRate = 48.6; // %
+  let initMoney = 1000; // 1000만원
+  let betMoney = 100;   // 100만원
+  let money = 1000;
+  let moneyHistory = [initMoney];
+
+  // DOM
+  const casinoRateInput = document.getElementById('casino-rate');
+  const gamblerRateInput = document.getElementById('gambler-rate');
+  const initMoneyInput = document.getElementById('init-money');
+  const betMoneyInput = document.getElementById('bet-money');
+    const try1 = document.getElementById('try1');
+    const try100 = document.getElementById('try100');
+    const try1000 = document.getElementById('try1000');
+    const resetBtn = document.getElementById('reset');
+    const casinoWinCell = document.getElementById('casino-win');
+    const gamblerWinCell = document.getElementById('gambler-win');
+    const totalTryCell = document.getElementById('total-try');
+    const casinoRateShow = document.getElementById('casino-rate-show');
+    const gamblerRateShow = document.getElementById('gambler-rate-show');
+    const moneyCell = document.getElementById('money');
+    const casinoProfitCell = document.getElementById('casino-profit');
+    const warnBox = document.getElementById('warn');
+    const canvas = document.getElementById('graph');
+    const ctx = canvas.getContext('2d');
+
+  function updateRates() {
+    casinoRate = 51.3;
+    gamblerRate = 48.6;
+    casinoRateInput.value = casinoRate.toFixed(1);
+    gamblerRateInput.value = gamblerRate.toFixed(1);
+  }
+
+  function updateBets() {
+    initMoney = 1000;
+    betMoney = parseInt(betMoneyInput.value, 10);
+    if (isNaN(betMoney) || betMoney < 1) betMoney = 100;
+  }
+
+  function updateTable() {
+    casinoWinCell.textContent = casinoWin;
+    gamblerWinCell.textContent = gamblerWin;
+    totalTryCell.textContent = totalTry;
+    casinoRateShow.textContent = totalTry ? (casinoWin/totalTry).toFixed(3) : "0";
+    gamblerRateShow.textContent = totalTry ? (gamblerWin/totalTry).toFixed(3) : "0";
+    moneyCell.textContent = money; // 만원 단위로 표시
+    const profit = initMoney - money;
+    casinoProfitCell.textContent = profit; // 만원 단위로 표시
+  }
+
+function drawGraph() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  // 승률 그래프
+  // 축
+  ctx.strokeStyle = "#bbb";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(90, 30);
+  ctx.lineTo(90, 140);
+  ctx.lineTo(400, 140);
+  ctx.stroke();
+
+      // y축 눈금 (0~1)
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#444";
+      for(let i=0; i<=5; i++){
+        let y = 140 - i*22;
+        ctx.beginPath();
+        ctx.moveTo(85, y);
+        ctx.lineTo(95, y);
+        ctx.stroke();
+        ctx.fillText((i*0.2).toFixed(1), 55, y+5);
+      }
+
+      // 막대 위치/너비
+      const barWidth = 60;
+      const gap = 80;
+      const baseX1 = 140; // 카지노
+      const baseX2 = baseX1 + gap; // 플레이어
+
+      // 이론적 승률(0.5) 회색 점선 (카지노, 플레이어 모두)
+      ctx.save();
+      ctx.strokeStyle = "#888";
+      ctx.lineWidth = 3;
+      ctx.setLineDash([7,7]);
+      ctx.beginPath();
+      ctx.moveTo(baseX1, 140-110*0.5);
+      ctx.lineTo(baseX1+barWidth, 140-110*0.5);
+      ctx.moveTo(baseX2, 140-110*0.5);
+      ctx.lineTo(baseX2+barWidth, 140-110*0.5);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+
+      // 카지노(빨강)
+      ctx.fillStyle = "#e74c3c";
+      let cRate = totalTry ? casinoWin/totalTry : 0;
+      ctx.fillRect(baseX1, 140-110*cRate, barWidth, 110*cRate);
+
+      // 플레이어(파랑)
+      ctx.fillStyle = "#2980b9";
+      let gRate = totalTry ? gamblerWin/totalTry : 0;
+      ctx.fillRect(baseX2, 140-110*gRate, barWidth, 110*gRate);
+
+      // x축 라벨
+      ctx.font = "16px sans-serif";
+      ctx.fillStyle = "#e74c3c";
+      ctx.fillText("카지노", baseX1+barWidth/2-22, 160);
+      ctx.fillStyle = "#2980b9";
+      ctx.fillText("플레이어", baseX2+barWidth/2-22, 160);
+
+      // 범례
+      ctx.font = "13px sans-serif";
+      ctx.fillStyle = "#e74c3c";
+      ctx.fillRect(340, 40, 18, 12);
+      ctx.fillStyle = "#222";
+      ctx.fillText("카지노 승률", 365, 50);
+      ctx.fillStyle = "#2980b9";
+      ctx.fillRect(340, 60, 18, 12);
+      ctx.fillStyle = "#222";
+      ctx.fillText("플레이어 승률", 365, 71);
+      ctx.strokeStyle = "#888";
+      ctx.setLineDash([7,7]);
+      ctx.strokeRect(340, 85, 18, 12);
+      ctx.setLineDash([]);
+      ctx.fillStyle = "#222";
+      ctx.fillText("이론적 승률(0.5)", 365, 96);
+
+      // 잔고 그래프
+      // 축
+  ctx.strokeStyle = "#bbb";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(90, 190);    // 기존 170 → 190
+  ctx.lineTo(90, 260);    // 기존 240 → 260
+  ctx.lineTo(400, 260);   // 기존 240 → 260
+  ctx.stroke();
+
+    // 잔고 꺾은선 그래프
+  if(moneyHistory.length>1){
+    let maxMoney = Math.max(...moneyHistory, initMoney);
+    let minMoney = Math.min(...moneyHistory, 0);
+    let span = maxMoney - minMoney || 1;
+    ctx.strokeStyle = "#16a085";
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    for(let i=0;i<moneyHistory.length;i++){
+      let x = 90 + (310*(i/(moneyHistory.length-1)));
+      let y = 260 - 70*(moneyHistory[i]-minMoney)/span; // 기존 240 → 260
+      if(i===0) ctx.moveTo(x,y);
+      else ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+    // y축 라벨
+    ctx.font = "13px sans-serif";
+    ctx.fillStyle = "#16a085";
+    ctx.fillText(maxMoney+"원", 405, 200); // 기존 180 → 200
+    ctx.fillText(minMoney+"원", 405, 260); // 기존 240 → 260
+  }
+  // 잔고 라벨
+  ctx.font = "14px sans-serif";
+  ctx.fillStyle = "#16a085";
+  ctx.fillText("잔고 변화", 200, 190); // 기존 170 → 190
+}
+
+    function simulate(n=1) {
+      updateRates();
+      updateBets();
+      warnBox.textContent = "";
+      for(let i=0; i<n; i++) {
+        let r = Math.random()*100;
+        if(r < casinoRate) {
+          casinoWin++;
+          money -= betMoney;
+        } else {
+          gamblerWin++;
+          money += betMoney;
+        }
+        totalTry++;
+        moneyHistory.push(money);
+      }
+      updateTable();
+      drawGraph();
+    }
+
+    function reset() {
+      updateRates();
+      updateBets();
+      casinoWin = 0; gamblerWin = 0; totalTry = 0;
+      money = initMoney;
+      moneyHistory = [initMoney];
+      warnBox.textContent = "";
+      updateTable();
+      drawGraph();
+    }
+
+    // 입력 이벤트
+    casinoRateInput.oninput = function() {
+      updateRates();
+      drawGraph();
+    };
+    initMoneyInput.oninput = function() {
+      updateBets();
+      reset();
+    };
+    betMoneyInput.oninput = function() {
+      updateBets();
+      drawGraph();
+    };
+
+    try1.onclick = () => simulate(1);
+    try100.onclick = () => simulate(100);
+    try1000.onclick = () => simulate(1000);
+    resetBtn.onclick = reset;
+
+    // 단축키: Control(1), 스페이스바(100), 엔터(1000)
+    document.addEventListener('keydown', function(e) {
+      if (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA") return;
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && !e.metaKey) {
+        e.preventDefault();
+        simulate(1);
+      } else if (e.code === "Space" || e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        simulate(100);
+      } else if (e.code === "Enter" || e.key === "Enter") {
+        e.preventDefault();
+        simulate(1000);
+      }
+    });
+
+    // 최초 그리기
+    updateRates();
+    updateBets();
+    updateTable();
+    drawGraph();
+  </script>
+</body>
+</html>
